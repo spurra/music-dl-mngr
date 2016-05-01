@@ -49,11 +49,9 @@ class dlMngr:
 
         # If available, open the data file for the downloaded music
         if os.path.isfile(self.picklePath):
-            try:
-                db = open(self.picklePath, 'r')
+            with open(self.picklePath, 'r') as db:
                 self.songDB = cPickle.load(db)
-            finally:
-                db.close()
+
 
     # Starts the manager
     def startManager(self):
@@ -69,22 +67,26 @@ class dlMngr:
 
                     for song in music_list:
                         with open(self.picklePath, 'w') as db:
-                            try:
-                                # Download the video
-                                print("Downloading song " + song.name + "...")
-                                video_path_nofe = self.downloadytVideo(song, dldir)
-                                # Convert it to mp3
-                                print("Converting to mp3...")
-                                self.convertmp4Tomp3(song, video_path_nofe)
-                                # Add the checksum of the mp3 file to songDB
-                                print("Done.")
-                                self.addSongtoDB(video_path_nofe + ".mp3", song)
-                            # Save the song database 
-                            finally:
-                                cPickle.dump(self.songDB, db, -1)
-                                db.close()
-        except IOError:
-            print("ERROR: Playlist file not found: " + self.playlistfile)
+                            # Download the video
+                            print("Downloading song " + song.name + "...")
+                            video_path_nofe = self.downloadytVideo(song, dldir)
+
+                            # Check if the video could be downloaded.
+                            if video_path_nofe is None:
+                                continue
+
+                            # Convert it to mp3
+                            print("Converting to mp3...")
+                            self.convertmp4Tomp3(song, video_path_nofe)
+                            # Add the checksum of the mp3 file to songDB
+                            print("Done.")
+                            self.addSongtoDB(video_path_nofe + ".mp3", song)
+
+                            # Save the song to the database
+                            cPickle.dump(self.songDB, db, -1)
+        except Exception as e:
+            print("ERROR:")
+            print(e)
        
 
 
@@ -151,6 +153,11 @@ class dlMngr:
         for element in playlistElems:
             # Remove unnecessary infos and whitespaces from title
             songName = self.cleanTitle(element.string)
+
+            # This song has been deleted. Don't process it.
+            if (len(songName) == 0):
+                continue
+
             # Construct the youtube link and remove playlist info from it
             songLink = self.ytBaseLink + re.sub("&.+$", "", element['href'])
             # Use the unique watch-link url as songID
@@ -167,15 +174,20 @@ class dlMngr:
         # specified.
         if os.path.isfile(dldir + "/" + song.name + ".mp4") and not song.mp4exists:
             os.remove(dldir + "/" + song.name + ".mp4")
-
-        # Get the video
-        yt = YouTube(song.url)
-        yt.set_filename(song.name)
-        # Select the mp4 video in the highest resolution
-        data = yt.filter('mp4')[-1]
-        video = yt.get('mp4', data.resolution)
-        # Download the video
-        video.download(dldir)
+        try:
+            # Get the video
+            yt = YouTube(song.url)
+            yt.set_filename(song.name)
+            # Select the mp4 video in the highest resolution
+            data = yt.filter('mp4')[-1]
+            video = yt.get('mp4', data.resolution)
+            # Download the video
+            video.download(dldir)
+        except Exception as e:
+            print("Something went wrong:")
+            print(e)
+            print("Ignoring...")
+            return None
 
         song.mp4exists = True
         videoFilePath_nofe = dldir + "/" + song.name
@@ -185,7 +197,7 @@ class dlMngr:
     # Converts the file in videoFilePath from .mp4 to .mp3 using ffmpeg.
     # The .mp3 file has a bitrate of 320k. If removeMp4 is true, it removes
     # the video file after conversion.
-    def convertmp4Tomp3(self, song, videoFilePath, removeMp4 = True):
+    def convertmp4Tomp3(self, song, videoFilePath, removeMp4=True):
         # If music file exists, remove it. Only the case if program crashed, 
         # therefore integrety of file cannot be guaranteed or reset option
         # specified.
