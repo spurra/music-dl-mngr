@@ -27,6 +27,8 @@ filePath = os.path.dirname(os.path.realpath(__file__))
 # Check if the reset argument has been set.
 if args.reset and os.path.isfile(filePath + "/" + dbfile):
     os.remove(filePath + "/" + dbfile)
+    if os.path.isfile(filePath + "/" + dbfile + "_backup"):
+        os.remove(filePath + "/" + dbfile + "_backup")
 
 
 # Initialise the manager

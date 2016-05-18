@@ -49,12 +49,22 @@ class dlMngr:
 
         # If available, open the data file for the downloaded music
         if os.path.isfile(self.picklePath):
-            with open(self.picklePath, 'r') as db:
-                self.songDB = cPickle.load(db)
+            try:
+                with open(self.picklePath, 'r') as db:
+                    self.songDB = cPickle.load(db)
+            except Exception:
+                print("Database corrupt, restoring from backup...")
+                with open(self.picklePath + "_backup", 'r') as bu, \
+                    open(self.picklePath, 'w') as db:
+                    self.songDB = cPickle.load(bu)
+                    cPickle.dump(self.songDB, db, -1)
+
+
 
 
     # Starts the manager
     def startManager(self):
+        updated = False
         try:
             with open(self.playlistfile, 'r') as f:
                 for line in f:
@@ -66,28 +76,44 @@ class dlMngr:
                         continue
 
                     for song in music_list:
+                        # Download the video
+                        print("Downloading song " + song.name + "...")
+                        video_path_nofe = self.downloadytVideo(song, dldir)
+
+                        # Check if the video could be downloaded.
+                        if video_path_nofe is None:
+                            continue
+
+                        # Convert it to mp3
+                        print("Converting to mp3...")
+                        self.convertmp4Tomp3(song, video_path_nofe)
+                        # Add the checksum of the mp3 file to songDB
+                        print("Done.")
+                        self.addSongtoDB(video_path_nofe + ".mp3", song)
+
                         with open(self.picklePath, 'w') as db:
-                            # Download the video
-                            print("Downloading song " + song.name + "...")
-                            video_path_nofe = self.downloadytVideo(song, dldir)
-
-                            # Check if the video could be downloaded.
-                            if video_path_nofe is None:
-                                continue
-
-                            # Convert it to mp3
-                            print("Converting to mp3...")
-                            self.convertmp4Tomp3(song, video_path_nofe)
-                            # Add the checksum of the mp3 file to songDB
-                            print("Done.")
-                            self.addSongtoDB(video_path_nofe + ".mp3", song)
-
                             # Save the song to the database
                             cPickle.dump(self.songDB, db, -1)
+                            updated = True
         except Exception as e:
             print("ERROR:")
             print(e)
-       
+
+        # Check if there has been an update to the original database and update
+        # the backup accordingly
+        if updated: 
+            try: 
+                with open(self.picklePath, 'r') as f1, open(self.picklePath 
+                    + "_backup", 'w') as f2:
+                    cPickle.load(f1)
+                    # If database loads fine, update the backup
+                    cPickle.dump(self.songDB, f2, -1)
+            except Exception as e:
+                print(e)
+                print("Database corrupt, redumping...")
+                cPickle.dump(self.songDB, f1, -1)
+                print("Redumped. Errors may still persist")
+
 
 
 
@@ -206,7 +232,7 @@ class dlMngr:
 
         # Convert the video to mp3 using ffmpeg
         call(["ffmpeg", "-i", videoFilePath + ".mp4", "-b:a", "320k", videoFilePath
-            + ".mp3"])
+            + ".mp3"], stdout=open(os.devnull, "w"))
 
         song.mp3exists = True
 
