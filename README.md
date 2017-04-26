@@ -1,5 +1,5 @@
 # music-dl-mngr
-A small script which downloads youtube videos of all playlists specified in playlists.txt
+Project to teach myself python. It downloads youtube videos of all playlists specified in playlists.txt
 
 Requirements:
 Python2
